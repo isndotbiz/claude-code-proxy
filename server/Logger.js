@@ -10,28 +10,52 @@ class Logger {
     return levels[this.config?.log_level] || 2;
   }
 
+  static getLogFormat() {
+    return this.config?.log_format || 'text';
+  }
+
+  static formatLog(level, ...args) {
+    if (this.getLogFormat() === 'json') {
+      const message = args.map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+      ).join(' ');
+
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        level: level,
+        message: message
+      };
+
+      return JSON.stringify(logEntry);
+    } else {
+      return `${level}: ${args.map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+      ).join(' ')}`;
+    }
+  }
+
   static debug(...args) {
     if (this.getLogLevel() >= 3) {
-      console.log('DEBUG:', ...args);
+      console.log(this.formatLog('DEBUG', ...args));
     }
   }
 
   static trace(...args) {
     if (this.getLogLevel() >= 4) {
-      console.log('TRACE:', ...args);
+      console.log(this.formatLog('TRACE', ...args));
     }
   }
 
   static info(...args) {
-    console.log('INFO:', ...args);
+    console.log(this.formatLog('INFO', ...args));
   }
 
   static warn(...args) {
-    console.warn('WARN:', ...args);
+    console.warn(this.formatLog('WARN', ...args));
   }
 
   static error(...args) {
-    console.error('ERROR:', ...args);
+    console.error(this.formatLog('ERROR', ...args));
   }
 
   static createDebugStream(label = 'Stream chunk', textExtractor = null) {

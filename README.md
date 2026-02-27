@@ -15,14 +15,21 @@ NOTE: this assumes you installed Claude Code in WSL on windows. They've made it 
 Requires: 
 - nvm, node (installed with nvm), Claude Code, logged in with "Claude account with subscription"
 1. `git clone https://github.com/horselock/claude-code-proxy.git`
-2. `run.sh` or `run.bat` depending on your OS; default port is 42069
+2. Copy `.env.example` to `.env` and set `openai_api_key`
+3. `run.sh` or `run.bat` depending on your OS; default port is 42069
 
-- NOT an OpenAI compatible proxy, uses Anthropic's schema 
+- Supports OpenAI-compatible endpoint at `/v1/chat/completions` (default backend)
+- Anthropic-compatible endpoint `/v1/messages` still supported if `backend=anthropic`
+- OpenAI auth modes: `auth_mode=api_key` (default) or `auth_mode=token_broker` for enterprise SSO token exchange
 - Only exact dated model names of Sonnet 4, 3.7, 3.6, and Haiku 3.5 are allowed. Opus 4 too with Max.
 - Understand your front end's caching, some FEs like ST disable by default, complex RP setups may consistently miss cache and increase costs
 
 ### Docker startup
 1. `docker-compose up` (Windows must enter this from wsl, with docker open obviously)
+
+### OpenAI auth notes
+- `auth_mode=api_key`: set `openai_api_key` in `.env` or pass it as `x-api-key`.
+- `auth_mode=token_broker`: set `token_broker_url` to your internal service that accepts user bearer tokens and returns `{ "openai_api_key": "..." }`.
 
 ## Beginner/Thorough Guide
 As you can see by the Quick Start, like 95% of the setup is making sure you have Claude Code and your local front end are set up right. This utility's setup by itself is pretty much "run the server and point your front end at it." 
@@ -58,11 +65,14 @@ You're done!
 
 <img width="638" alt="image" src="https://github.com/user-attachments/assets/3b94e5c4-d52d-4ee8-8d26-675ba667f7a8" />
 
-- URL = `http://localhost:42069/v1`
+- URL = `http://localhost:42069/v1` for Anthropic schema
+- URL = `http://localhost:42069/v1/chat/completions` for OpenAI schema
 - Literally anything for password, just don't leave blank. As a backup option, you may put your oauth access token here (see Troubleshooting section)
 - You have to pick a specific name for the model, can't pick "latest". Have to have a date at the end. Only Sonnet (20241022 or later) and 3.5 Haiku are allowed plus Opus with Max. 
 - Save the preset as "Claude Code Proxy" or whatever you want.
 - Click "Connect"
+- Optional: check `http://localhost:42069/health` to confirm the proxy is up.
+- Optional: check `http://localhost:42069/presets` to list available preset names.
 
 ### Optional (but important to read for ST noobs)
 - Strip down SillyTavern to make it a plain chat client. Not saying you necessarily *should* do this, but it's useful to know how to do it.

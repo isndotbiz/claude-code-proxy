@@ -43,19 +43,32 @@ class ClaudeRequest {
   static presetCache = new Map();
   static refreshPromise = null;
 
-  constructor(req = null) {
+  constructor(req = null, requestId = null, metrics = null) {
     this.API_URL = 'https://api.anthropic.com/v1/messages';
     this.VERSION = '2023-06-01';
     this.BETA_HEADER = 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14';
+    this.metrics = metrics;
+    this.requestId = requestId;
 
     const apiKey = req?.headers?.['x-api-key'];
-    if (apiKey && apiKey.includes('sk-ant')) {
-      Logger.debug('Using x-api-key as token, replacing cache');
-      const token = apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}`;
+    const authHeader = req?.headers?.['authorization'];
+    const rawToken = (apiKey || authHeader || '').trim();
+    if (rawToken) {
+      Logger.debug(this.log('Using provided token from x-api-key/authorization, replacing cache'));
+      let token = rawToken;
+      if (/^bearer /i.test(token)) {
+        token = `Bearer ${token.slice(7)}`;
+      } else {
+        token = `Bearer ${token}`;
+      }
       ClaudeRequest.cachedToken = token;
     }
 
     this.refreshToken = TOKEN_REFRESH_METHOD === 'OAUTH' ? this.refreshTokenWithOauth : this.refreshTokenWithClaudeCodeCli;
+  }
+
+  log(message) {
+    return this.requestId ? `[${this.requestId}] ${message}` : message;
   }
 
   stripTtlFromCacheControl(body) {
@@ -257,8 +270,11 @@ class ClaudeRequest {
       
       const credentialsJson = JSON.stringify(credentials);
       this.writeCredentialsToFile(credentialsJson);
-      
+
       Logger.info('Token refreshed successfully');
+      if (this.metrics) {
+        this.metrics.recordTokenRefresh();
+      }
       return `Bearer ${response.access_token}`;
       
     } catch (error) {
@@ -378,8 +394,8 @@ class ClaudeRequest {
     const headers = this.getHeaders(token);
     const processedBody = this.processRequestBody(body, presetName);
 
-    Logger.debug('Outgoing headers to Claude:', JSON.stringify(headers, null, 2));
-    Logger.debug(`Final request to Claude (${JSON.stringify(processedBody).length} bytes):`, JSON.stringify(processedBody, null, 2));
+    Logger.debug(this.log('Outgoing headers to Claude:'), JSON.stringify(headers, null, 2));
+    Logger.debug(this.log(`Final request to Claude (${JSON.stringify(processedBody).length} bytes):`), JSON.stringify(processedBody, null, 2));
 
     const urlParts = new URL(this.API_URL);
     const options = {
@@ -387,7 +403,8 @@ class ClaudeRequest {
       port: urlParts.port || 443,
       path: urlParts.pathname,
       method: 'POST',
-      headers: headers
+      headers: headers,
+      timeout: 120000 // 2 minute timeout
     };
 
     return new Promise((resolve, reject) => {
@@ -395,11 +412,17 @@ class ClaudeRequest {
         resolve(res);
       });
 
+      req.setTimeout(120000, () => {
+        req.destroy();
+        reject(new Error('Claude API request timeout'));
+      });
+
       req.on('error', (err) => {
+        if (req.res) req.res.destroy();
         req.destroy();
         reject(err);
       });
-      
+
       req.write(JSON.stringify(processedBody));
       req.end();
     });
@@ -440,9 +463,13 @@ class ClaudeRequest {
       this.streamResponse(res, claudeResponse);
       
     } catch (error) {
-      console.error('Claude request error:', error.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: error.message }));
+      Logger.error(this.log('Claude request error:'), error.message);
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      } else if (!res.destroyed) {
+        res.end();
+      }
     }
   }
 

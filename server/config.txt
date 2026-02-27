@@ -1,4 +1,17 @@
 port=42069
-host=0.0.0.0
-log_level=INFO  # TRACE, DEBUG, INFO, WARN, ERROR
+host=127.0.0.1  # Localhost only for better performance
+backend=openai  # openai or anthropic
+auth_mode=api_key  # api_key or token_broker
+openai_api_key=  # Set your OpenAI API key here or in .env
+openai_base_url=https://api.openai.com/v1/chat/completions  # For OpenRouter/compatible endpoints, set full URL
+token_broker_url=  # Required when auth_mode=token_broker
+log_level=ERROR  # Only log errors for speed
+log_format=text  # text or json (json format includes timestamps and structured data)
 filter_sampling_params=false  # Set to true to ensure only one sampling parameter is sent (required for Sonnet 4.5 compatibility). Removes default values (1.0) and prefers temperature over top_p when both are non-default.
+max_body_bytes=2097152  # 2MB - reduced for faster parsing
+cors_origin=*  # Access-Control-Allow-Origin value.
+
+# Rate limiting (prevents abuse)
+rate_limit_enabled=false  # Disabled for local use - faster
+rate_limit_max_requests=1000  # Max requests per window
+rate_limit_window_ms=60000  # Window duration in milliseconds (60000 = 1 minute)
